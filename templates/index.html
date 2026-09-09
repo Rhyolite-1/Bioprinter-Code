@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Agar Line-Trace Generator</title>
+<style>
+  :root {
+    --ink: #1c2321;
+    --paper: #faf9f6;
+    --line: #d8d3c8;
+    --accent: #3a6b52;
+    --accent-soft: #e7efe9;
+    --warn: #8a4b1f;
+    --warn-bg: #fbeee0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    margin: 0;
+    padding: 2.5rem 1.5rem;
+  }
+  main { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+  p.sub { color: #5a5f5c; margin-top: 0; margin-bottom: 2rem; }
+  form {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 1.75rem;
+  }
+  label.field-label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+  }
+  input[type="file"] {
+    display: block;
+    width: 100%;
+    padding: 0.6rem;
+    border: 1px dashed var(--line);
+    border-radius: 6px;
+    background: #fcfcfa;
+    margin-bottom: 1.5rem;
+  }
+  fieldset {
+    border: none;
+    padding: 0;
+    margin: 0 0 1.5rem 0;
+  }
+  .mode-option {
+    display: block;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.6rem;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .mode-option:hover { border-color: var(--accent); }
+  .mode-option input { margin-right: 0.6rem; }
+  .mode-option input:checked ~ .mode-title { color: var(--accent); }
+  .mode-option:has(input:checked) {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .mode-title { font-weight: 600; }
+  .mode-desc { display: block; margin-left: 1.5rem; font-size: 0.85rem; color: #5a5f5c; }
+  .placement-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem 1.25rem;
+  }
+  .placement-field { margin-bottom: 0.9rem; }
+  .placement-field label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: #5a5f5c;
+    margin-bottom: 0.35rem;
+  }
+  .placement-field input[type="range"] { width: 100%; }
+  .placement-field input[type="number"] {
+    width: 100%;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-size: 0.9rem;
+  }
+  .placement-hint { font-size: 0.8rem; color: #8a8f8c; margin: -0.5rem 0 1.25rem 0; }
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  button:hover { opacity: 0.92; }
+  .error {
+    background: var(--warn-bg);
+    color: var(--warn);
+    border: 1px solid #e0b98f;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.25rem;
+    font-size: 0.9rem;
+  }
+  footer { margin-top: 2rem; font-size: 0.8rem; color: #8a8f8c; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Agar Line-Trace Generator</h1>
+  <p class="sub">Upload an image, pick a trace mode, get G-code sized to the plate.</p>
+
+  {% if error %}
+    <div class="error">{{ error }}</div>
+  {% endif %}
+
+  <form action="/generate" method="post" enctype="multipart/form-data">
+    <label class="field-label" for="image">Source image (PNG or JPEG)</label>
+    <input type="file" id="image" name="image" accept=".png,.jpg,.jpeg" required>
+
+    <fieldset>
+      <label class="field-label">Trace mode</label>
+      {% for mode, desc in trace_modes.items() %}
+      <label class="mode-option">
+        <input type="radio" name="trace_mode" value="{{ mode }}" {% if mode == "both" %}checked{% endif %}>
+        <span class="mode-title">{{ mode }}</span>
+        <span class="mode-desc">{{ desc }}</span>
+      </label>
+      {% endfor %}
+    </fieldset>
+
+    <fieldset>
+      <label class="field-label">Placement</label>
+      <div class="placement-field">
+        <label for="scale_pct"><span>Scale</span><span id="scale_pct_val">100%</span></label>
+        <input type="range" id="scale_pct" name="scale_pct" min="10" max="150" step="1" value="100"
+               oninput="document.getElementById('scale_pct_val').textContent = this.value + '%'">
+      </div>
+      <div class="placement-grid">
+        <div class="placement-field">
+          <label for="offset_x_mm">X offset (mm)</label>
+          <input type="number" id="offset_x_mm" name="offset_x_mm" value="0" step="0.5" min="-40" max="40">
+        </div>
+        <div class="placement-field">
+          <label for="offset_y_mm">Y offset (mm)</label>
+          <input type="number" id="offset_y_mm" name="offset_y_mm" value="0" step="0.5" min="-40" max="40">
+        </div>
+      </div>
+      <p class="placement-hint">100% auto-fits the design to the plate, centered. Offsets shift it from center; the result page will warn if it no longer fits the dish.</p>
+    </fieldset>
+
+    <fieldset>
+      <label class="field-label" for="print_height_mm">Print height (mm)</label>
+      <div class="placement-field">
+        <input type="number" id="print_height_mm" name="print_height_mm" value="{{ default_print_height_mm }}" step="0.05" min="0.5" max="15">
+      </div>
+      <p class="placement-hint">Defaults to the agar surface height for a 20mL pour in the 85mm dish (volume &divide; plate area), plus 0.1mm clearance. Adjust if you poured a different volume.</p>
+    </fieldset>
+
+    <fieldset>
+      <label class="field-label" for="extrusion_per_mm">Extrusion per mm (mm&sup3;/mm)</label>
+      <div class="placement-field">
+        <input type="number" id="extrusion_per_mm" name="extrusion_per_mm" value="{{ default_extrusion_per_mm }}" step="0.0001" min="0.0005" max="0.05">
+      </div>
+      <p class="placement-hint">Defaults to the lowest value that worked in past physical testing. Lower = thinner bead.</p>
+    </fieldset>
+
+    <button type="submit">Generate G-code</button>
+  </form>
+
+  <footer>Dark pixels are treated as foreground. Design is scaled to fit the printable plate area, and paths are clipped to the physical dish edge.</footer>
+</main>
+</body>
+</html>

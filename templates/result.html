@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Agar Line-Trace Generator - Result</title>
+<style>
+  :root {
+    --ink: #1c2321;
+    --paper: #faf9f6;
+    --line: #d8d3c8;
+    --accent: #3a6b52;
+    --accent-soft: #e7efe9;
+    --warn: #8a4b1f;
+    --warn-bg: #fbeee0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    margin: 0;
+    padding: 2.5rem 1.5rem;
+  }
+  main { max-width: 800px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin-bottom: 1.5rem; }
+  a.back { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+  a.back:hover { text-decoration: underline; }
+  .preview {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    margin: 1.25rem 0;
+    background: white;
+  }
+  .warning {
+    background: var(--warn-bg);
+    color: var(--warn);
+    border: 1px solid #e0b98f;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.25rem;
+    font-size: 0.9rem;
+  }
+  table.stats {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.5rem;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  table.stats td {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.9rem;
+  }
+  table.stats tr:last-child td { border-bottom: none; }
+  table.stats td:first-child { color: #5a5f5c; width: 55%; }
+  table.stats td:last-child { font-weight: 600; text-align: right; }
+  .actions { display: flex; gap: 0.75rem; margin-bottom: 2rem; flex-wrap: wrap; }
+  a.button, button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 0.7rem 1.4rem;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    text-decoration: none;
+    display: inline-block;
+    cursor: pointer;
+  }
+  a.button.secondary {
+    background: white;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+  }
+  a.button:hover, button:hover { opacity: 0.92; }
+  .mode-pill {
+    display: inline-block;
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-left: 0.5rem;
+  }
+  details.adjust {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 2rem;
+  }
+  details.adjust summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+  .placement-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem 1.25rem;
+    margin-top: 1rem;
+  }
+  .placement-field { margin-bottom: 0.9rem; }
+  .placement-field label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: #5a5f5c;
+    margin-bottom: 0.35rem;
+  }
+  .placement-field input[type="range"] { width: 100%; }
+  .placement-field input[type="number"] {
+    width: 100%;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-size: 0.9rem;
+  }
+</style>
+</head>
+<body>
+<main>
+  <a class="back" href="/">&larr; Start over</a>
+  <h1>Result <span class="mode-pill">{{ trace_mode }}</span></h1>
+
+  {% for w in warnings %}
+    <div class="warning">{{ w }}</div>
+  {% endfor %}
+
+  <img class="preview" src="data:image/png;base64,{{ preview_b64 }}" alt="Trace preview">
+
+  <table class="stats">
+    <tr><td>Paths generated</td><td>{{ n_paths }}</td></tr>
+    <tr><td>Foreground (dark pixel) fraction</td><td>{{ fg_fraction }}%</td></tr>
+    <tr><td>Total traced line length</td><td>{{ total_len_mm }} mm</td></tr>
+    <tr><td>Estimated total extrusion</td><td>{{ est_extrusion_mm }} mm</td></tr>
+    <tr><td>Design footprint on plate</td><td>{{ area_w_mm }} x {{ area_h_mm }} mm</td></tr>
+    <tr><td>Placement</td><td>{{ scale_pct|round(0)|int }}% scale, offset ({{ offset_x_mm }}, {{ offset_y_mm }}) mm</td></tr>
+    <tr><td>Print height</td><td>{{ print_height_mm }} mm</td></tr>
+    <tr><td>Extrusion per mm</td><td>{{ extrusion_per_mm }} mm&sup3;/mm</td></tr>
+    <tr><td>Working resolution used for tracing</td><td>{{ working_resolution }} px</td></tr>
+  </table>
+
+  <div class="actions">
+    <a class="button" href="/download/{{ session_id }}/gcode">Download G-code</a>
+    <a class="button secondary" href="/">Try a different mode</a>
+  </div>
+
+  <details class="adjust">
+    <summary>Adjust scale &amp; position</summary>
+    <form action="/regenerate/{{ session_id }}" method="post">
+      <input type="hidden" name="trace_mode" value="{{ trace_mode }}">
+      <div class="placement-field">
+        <label for="scale_pct"><span>Scale</span><span id="scale_pct_val">{{ scale_pct|round(0)|int }}%</span></label>
+        <input type="range" id="scale_pct" name="scale_pct" min="10" max="150" step="1" value="{{ scale_pct|round(0)|int }}"
+               oninput="document.getElementById('scale_pct_val').textContent = this.value + '%'">
+      </div>
+      <div class="placement-grid">
+        <div class="placement-field">
+          <label for="offset_x_mm">X offset (mm)</label>
+          <input type="number" id="offset_x_mm" name="offset_x_mm" value="{{ offset_x_mm }}" step="0.5" min="-40" max="40">
+        </div>
+        <div class="placement-field">
+          <label for="offset_y_mm">Y offset (mm)</label>
+          <input type="number" id="offset_y_mm" name="offset_y_mm" value="{{ offset_y_mm }}" step="0.5" min="-40" max="40">
+        </div>
+        <div class="placement-field">
+          <label for="print_height_mm">Print height (mm)</label>
+          <input type="number" id="print_height_mm" name="print_height_mm" value="{{ print_height_mm }}" step="0.05" min="0.5" max="15">
+        </div>
+        <div class="placement-field">
+          <label for="extrusion_per_mm">Extrusion per mm</label>
+          <input type="number" id="extrusion_per_mm" name="extrusion_per_mm" value="{{ extrusion_per_mm }}" step="0.0001" min="0.0005" max="0.05">
+        </div>
+      </div>
+      <button type="submit">Regenerate with these settings</button>
+    </form>
+  </details>
+</main>
+</body>
+</html>
